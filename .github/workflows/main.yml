@@ -22,11 +22,11 @@ jobs:
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose --version
 
-      - name: Build and Push Docker Images
+      - name: Build Docker Images
         run: |
           docker-compose build
 
-      - name: Deploy to AWS
+      - name: Deploy to AWS EC2
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           HOST: ${{ secrets.EC2_HOST_IP }}
@@ -36,12 +36,12 @@ jobs:
           echo "$SSH_PRIVATE_KEY" > private_key.pem
           chmod 600 private_key.pem
 
-          # Use rsync to copy the project, excluding .git directory
+          # Copy the project to EC2
           rsync -avz --exclude='.git' -e "ssh -o StrictHostKeyChecking=no -i private_key.pem" ./ $USER@$HOST:/home/ubuntu/app
 
-          # SSH into the server to configure Docker and rebuild containers
+          # SSH into the server and deploy
           ssh -o StrictHostKeyChecking=no -i private_key.pem $USER@$HOST "
-            # Ensure Docker is installed
+            # Install Docker if not installed
             if ! [ -x \"\$(command -v docker)\" ]; then
               echo 'Docker not found. Installing...'
               sudo apt-get update -y &&
@@ -50,7 +50,7 @@ jobs:
               sudo systemctl start docker
             fi
 
-            # Ensure Docker Compose is installed
+            # Install Docker Compose if not installed
             DOCKER_COMPOSE_VERSION=2.22.0
             if ! [ -x \"\$(command -v docker-compose)\" ]; then
               echo 'Docker Compose not found. Installing...'
@@ -58,11 +58,7 @@ jobs:
               sudo chmod +x /usr/local/bin/docker-compose
             fi
 
-            # Verify Docker and Docker Compose installations
-            docker --version
-            docker-compose --version
-
-            # Navigate to app directory and rebuild containers
+            # Navigate to app directory and deploy
             cd /home/ubuntu/app &&
             sudo docker-compose down &&
             sudo docker-compose up -d --build
